@@ -9,7 +9,6 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::*;
 use core::mem;
-use core::num::NonZeroU16;
 use core::ops::Deref;
 use hashbrown::HashMap;
 use ttf_parser::{Face, FaceParsingError, GlyphId, Tag};
@@ -188,7 +187,7 @@ pub struct Font {
     name: Option<String>,
     units_per_em: f32,
     glyphs: Vec<Glyph>,
-    char_to_glyph: HashMap<u32, NonZeroU16>,
+    char_to_glyph: HashMap<u32, u16>,
     horizontal_line_metrics: Option<LineMetrics>,
     horizontal_kern: Option<HashMap<u32, i16>>,
     vertical_line_metrics: Option<LineMetrics>,
@@ -250,7 +249,7 @@ impl Font {
                 if let Some(mapping) = subtable.glyph_index(codepoint) {
                     // Zero is a valid value for missing glyphs, so even if a mapping is zero, the
                     // result is desireable.
-                    char_to_glyph.insert(codepoint, unsafe { NonZeroU16::new_unchecked(mapping.0) });
+                    char_to_glyph.insert(codepoint, mapping.0);
                 }
             });
         }
@@ -263,7 +262,7 @@ impl Font {
         let glyph_count = face.number_of_glyphs() as usize;
         let mut glyphs: Vec<Glyph> = vec::from_elem(Glyph::default(), glyph_count);
         for (_, mapping) in &char_to_glyph {
-            let mapping = unsafe { mem::transmute::<NonZeroU16, u16>(*mapping) as usize };
+            let mapping = *mapping as usize;
             if mapping as usize >= glyph_count {
                 return Err("Attempted to map a codepoint out of bounds.");
             }
@@ -564,9 +563,7 @@ impl Font {
     /// the font then 0 is returned.
     #[inline]
     pub fn lookup_glyph_index(&self, character: char) -> u16 {
-        unsafe {
-            mem::transmute::<Option<NonZeroU16>, u16>(self.char_to_glyph.get(&(character as u32)).copied())
-        }
+        self.char_to_glyph.get(&(character as u32)).copied().unwrap_or_default()
     }
 
     /// Gets the total glyphs in the font.
